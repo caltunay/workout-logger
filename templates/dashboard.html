@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Workout Tracker</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 min-h-screen p-6">
+    <div class="max-w-2xl mx-auto">
+        <!-- Session Status -->
+        <div id="sessionStatus" class="mb-6">
+            <div id="noSession" class="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                <p class="text-yellow-800">No active workout session.</p>
+                <button 
+                    onclick="startSession()" 
+                    class="mt-2 bg-green-600 hover:bg-green-700 text-white font-medium py-2 px-4 rounded-lg"
+                >
+                    Start Workout Session
+                </button>
+            </div>
+            
+            <div id="activeSession" class="bg-green-50 border border-green-200 rounded-lg p-4 hidden">
+                <p class="text-green-800">Active workout session in progress</p>
+                <button 
+                    onclick="endSession()" 
+                    class="mt-2 bg-red-600 hover:bg-red-700 text-white font-medium py-2 px-4 rounded-lg"
+                >
+                    End Session
+                </button>
+            </div>
+        </div>
+
+        <h1 class="text-3xl font-bold text-gray-800 mb-8">Add New Workout Set</h1>
+        
+        <!-- Add Workout Set Form -->
+        <div class="bg-white rounded-lg shadow-md p-6 mb-8">
+            <form id="workoutForm" class="flex flex-col md:flex-row gap-4">
+                <input type="hidden" id="sessionId" name="session_id">
+                
+                <div class="flex-1 relative">
+                    <input 
+                        type="text" 
+                        id="exerciseName" 
+                        name="exercise_name" 
+                        placeholder="Exercise name" 
+                        required 
+                        autocomplete="off"
+                        class="w-full px-4 py-3 text-lg border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    >
+                    <div id="exerciseDropdown" class="absolute top-full left-0 right-0 bg-white border border-gray-300 rounded-lg shadow-lg z-10 hidden max-h-48 overflow-y-auto">
+                        <!-- Exercise suggestions will appear here -->
+                    </div>
+                </div>
+                
+                <div class="w-full md:w-20">
+                    <input 
+                        type="number" 
+                        id="reps" 
+                        name="reps" 
+                        placeholder="10" 
+                        min="1" 
+                        required 
+                        class="w-full px-2 py-3 text-center border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    >
+                </div>
+                
+                <div class="w-full md:w-20">
+                    <input 
+                        type="number" 
+                        id="weight" 
+                        name="weight" 
+                        placeholder="0" 
+                        min="0" 
+                        step="1" 
+                        required 
+                        class="w-full px-2 py-3 text-center border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    >
+                </div>
+                
+                <div class="w-full md:w-16">
+                    <select 
+                        id="isKg" 
+                        name="is_kg" 
+                        class="w-full px-2 py-3 text-center border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    >
+                        <option value="false">lbs</option>
+                        <option value="true">kg</option>
+                    </select>
+                </div>
+                
+                <button 
+                    type="submit" 
+                    id="addSetBtn"
+                    disabled
+                    class="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white font-medium py-3 px-8 rounded-lg transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                >
+                    Add Set
+                </button>
+            </form>
+        </div>
+
+        <!-- Current Session Sets -->
+        <div class="bg-white rounded-lg shadow-md p-6">
+            <h2 class="text-xl font-semibold text-gray-800 mb-4">Current Session Sets</h2>
+            <div id="sessionSets" class="space-y-3">
+                <!-- Session sets will be loaded here -->
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentSessionId = null;
+        let accessToken = localStorage.getItem('access_token');
+        let userId = localStorage.getItem('user_id');
+
+        // Check if user is logged in
+        if (!accessToken || !userId) {
+            window.location.href = '/';
+        }
+
+        // Load current session on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            loadCurrentSession();
+            setupExerciseAutocomplete();
+        });
+
+        // Setup exercise autocomplete
+        function setupExerciseAutocomplete() {
+            const exerciseInput = document.getElementById('exerciseName');
+            const dropdown = document.getElementById('exerciseDropdown');
+            let debounceTimeout;
+
+            exerciseInput.addEventListener('input', function() {
+                const query = this.value.trim();
+                
+                // Clear previous timeout
+                clearTimeout(debounceTimeout);
+                
+                // Debounce the API call
+                debounceTimeout = setTimeout(() => {
+                    if (query.length > 1) {
+                        fetchExerciseSuggestions(query);
+                    } else {
+                        hideDropdown();
+                    }
+                }, 300);
+            });
+
+            // Hide dropdown when clicking outside
+            document.addEventListener('click', function(e) {
+                if (!exerciseInput.contains(e.target) && !dropdown.contains(e.target)) {
+                    hideDropdown();
+                }
+            });
+
+            // Handle keyboard navigation
+            exerciseInput.addEventListener('keydown', function(e) {
+                const items = dropdown.querySelectorAll('.dropdown-item');
+                let currentIndex = Array.from(items).findIndex(item => item.classList.contains('highlighted'));
+
+                if (e.key === 'ArrowDown') {
+                    e.preventDefault();
+                    currentIndex = currentIndex < items.length - 1 ? currentIndex + 1 : 0;
+                    highlightItem(items, currentIndex);
+                } else if (e.key === 'ArrowUp') {
+                    e.preventDefault();
+                    currentIndex = currentIndex > 0 ? currentIndex - 1 : items.length - 1;
+                    highlightItem(items, currentIndex);
+                } else if (e.key === 'Enter' && currentIndex >= 0) {
+                    e.preventDefault();
+                    items[currentIndex].click();
+                } else if (e.key === 'Escape') {
+                    hideDropdown();
+                }
+            });
+        }
+
+        // Fetch exercise suggestions
+        async function fetchExerciseSuggestions(query) {
+            console.log('Fetching suggestions for:', query);
+            try {
+                const response = await fetch(`/api/exercise-suggestions?query=${encodeURIComponent(query)}`);
+                const result = await response.json();
+                console.log('API response:', result);
+                
+                if (result.success && result.suggestions.length > 0) {
+                    console.log('Showing dropdown with', result.suggestions.length, 'suggestions');
+                    showDropdown(result.suggestions);
+                } else {
+                    console.log('No suggestions or API error');
+                    hideDropdown();
+                }
+            } catch (error) {
+                console.error('Error fetching suggestions:', error);
+                hideDropdown();
+            }
+        }
+
+        // Show dropdown with suggestions
+        function showDropdown(suggestions) {
+            console.log('showDropdown called with:', suggestions);
+            const dropdown = document.getElementById('exerciseDropdown');
+            
+            dropdown.innerHTML = suggestions.map(suggestion => `
+                <div class="dropdown-item px-4 py-3 hover:bg-blue-50 cursor-pointer border-b border-gray-100 last:border-b-0 bg-white" 
+                     onclick="selectExercise('${suggestion.exercise.replace(/'/g, "\\'")}')">
+                    <div class="font-medium text-gray-800">${suggestion.exercise}</div>
+                    ${suggestion.match ? `<div class="text-sm text-gray-500">${suggestion.match} match</div>` : ''}
+                </div>
+            `).join('');
+            
+            dropdown.classList.remove('hidden');
+        }
+
+        // Hide dropdown
+        function hideDropdown() {
+            document.getElementById('exerciseDropdown').classList.add('hidden');
+        }
+
+        // Highlight dropdown item
+        function highlightItem(items, index) {
+            items.forEach(item => item.classList.remove('highlighted', 'bg-blue-50'));
+            if (items[index]) {
+                items[index].classList.add('highlighted', 'bg-blue-50');
+            }
+        }
+
+        // Select exercise from dropdown
+        function selectExercise(exerciseName) {
+            document.getElementById('exerciseName').value = exerciseName;
+            hideDropdown();
+            // Focus next field
+            document.getElementById('reps').focus();
+        }
+
+        // Start new workout session
+        async function startSession() {
+            try {
+                const formData = new FormData();
+                formData.append('user_id', userId);
+                formData.append('access_token', accessToken);
+                
+                const response = await fetch('/api/start-session', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    currentSessionId = result.session_id;
+                    updateSessionUI(true);
+                    document.getElementById('sessionId').value = currentSessionId;
+                    document.getElementById('addSetBtn').disabled = false;
+                } else {
+                    alert('Failed to start session: ' + result.detail);
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Failed to start session');
+            }
+        }
+
+        // End current workout session
+        async function endSession() {
+            if (!currentSessionId) return;
+            
+            try {
+                const formData = new FormData();
+                formData.append('user_id', userId);
+                formData.append('access_token', accessToken);
+                
+                const response = await fetch(`/api/end-session/${currentSessionId}`, {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    currentSessionId = null;
+                    updateSessionUI(false);
+                    document.getElementById('sessionId').value = '';
+                    document.getElementById('addSetBtn').disabled = true;
+                    document.getElementById('sessionSets').innerHTML = '<p class="text-gray-500 text-center py-4">No active session.</p>';
+                } else {
+                    alert('Failed to end session: ' + result.detail);
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Failed to end session');
+            }
+        }
+
+        // Update session UI
+        function updateSessionUI(hasActiveSession) {
+            const noSession = document.getElementById('noSession');
+            const activeSession = document.getElementById('activeSession');
+            
+            if (hasActiveSession) {
+                noSession.classList.add('hidden');
+                activeSession.classList.remove('hidden');
+            } else {
+                noSession.classList.remove('hidden');
+                activeSession.classList.add('hidden');
+            }
+        }
+
+        // Load current session
+        async function loadCurrentSession() {
+            try {
+                const response = await fetch(`/api/current-session?user_id=${userId}&access_token=${accessToken}`);
+                const result = await response.json();
+                
+                if (result.success && result.session) {
+                    currentSessionId = result.session.id;
+                    updateSessionUI(true);
+                    document.getElementById('sessionId').value = currentSessionId;
+                    document.getElementById('addSetBtn').disabled = false;
+                    displaySessionSets(result.sets);
+                } else {
+                    updateSessionUI(false);
+                    document.getElementById('addSetBtn').disabled = true;
+                }
+            } catch (error) {
+                console.error('Error loading session:', error);
+            }
+        }
+
+        // Handle form submission
+        document.getElementById('workoutForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            if (!currentSessionId) {
+                alert('Please start a session first');
+                return;
+            }
+            
+            const formData = new FormData(this);
+            formData.append('user_id', userId);
+            formData.append('access_token', accessToken);
+            
+            try {
+                const response = await fetch('/api/add-set', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    // Reset form
+                    this.reset();
+                    document.getElementById('sessionId').value = currentSessionId;
+                    // Reload current session
+                    loadCurrentSession();
+                } else {
+                    alert('Failed to add set: ' + result.detail);
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Failed to add set');
+            }
+        });
+
+        // Display session sets
+        function displaySessionSets(sets) {
+            const sessionSets = document.getElementById('sessionSets');
+            
+            if (sets.length === 0) {
+                sessionSets.innerHTML = '<p class="text-gray-500 text-center py-4">No sets in current session.</p>';
+                return;
+            }
+            
+            sessionSets.innerHTML = sets.map((set, index) => `
+                <div class="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+                    <div class="flex-1">
+                        <h3 class="font-medium text-gray-800">${set.exercise_name}</h3>
+                        <p class="text-sm text-gray-600">${set.reps} reps × ${set.weight} ${set.is_kg ? 'kg' : 'lbs'}</p>
+                    </div>
+                    <div class="text-sm text-gray-500">
+                        Set ${index + 1}
+                    </div>
+                </div>
+            `).join('');
+        }
+    </script>
+</body>
+</html>
