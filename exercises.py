@@ -1,55 +1,45 @@
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.metrics.pairwise import cosine_similarity
 from config import supabase
+from typing import Dict
 
-def get_exercise_suggestions(query: str):
+def get_exercise_suggestions(query: str, max_suggestions: int = 10) -> Dict:
+    """Exercise search using PostgreSQL fuzzy search with fallback."""
     try:
-        exercises_result = supabase.table("dim_exercises").select("exercise").execute()
-        
-        if not exercises_result.data:
-            return {"success": True, "suggestions": []}
-        
-        exercise_names = [ex["exercise"] for ex in exercises_result.data]
-        
         if len(query.strip()) < 2:
-            return {"success": True, "suggestions": [{"exercise": name} for name in exercise_names[:5]]}
+            result = supabase.table("dim_exercises").select("exercise").limit(max_suggestions).execute()
+            return {"success": True, "suggestions": [{"exercise": ex["exercise"]} for ex in result.data]}
         
-        try:
-            query_lower = query.lower()
-            exercise_texts = [name.lower() for name in exercise_names]
-            
-            char_vectorizer = TfidfVectorizer(ngram_range=(2, 4), analyzer='char', max_features=500)
-            char_tfidf_matrix = char_vectorizer.fit_transform(exercise_texts)
-            char_query_vector = char_vectorizer.transform([query_lower])
-            char_similarities = cosine_similarity(char_query_vector, char_tfidf_matrix).flatten()
-            
-            word_vectorizer = TfidfVectorizer(ngram_range=(1, 2), analyzer='word', max_features=500)
-            word_tfidf_matrix = word_vectorizer.fit_transform(exercise_texts)
-            word_query_vector = word_vectorizer.transform([query_lower])
-            word_similarities = cosine_similarity(word_query_vector, word_tfidf_matrix).flatten()
-            
-            combined_similarities = 0.6 * char_similarities + 0.4 * word_similarities
-            similar_indices = combined_similarities.argsort()[::-1]
-            
+        # Use the fuzzy PostgreSQL search function without threshold - return top matches
+        result = supabase.rpc('search_exercises_fuzzy', {
+            'search_term': query.strip(),
+            'similarity_threshold': 0.0,  # No threshold - return all matches ranked by similarity
+            'max_results': max_suggestions
+        }).execute()
+        
+        if result.data:
             suggestions = []
-            for idx in similar_indices:
-                if combined_similarities[idx] > 0 and len(suggestions) < 5:
-                    suggestions.append({"exercise": exercise_names[idx]})
-            
-            if not suggestions:
-                for name in exercise_names:
-                    if query_lower in name.lower() and len(suggestions) < 5:
-                        suggestions.append({"exercise": name})
+            for ex in result.data:
+                suggestion = {"exercise": ex["exercise"]}
+                # Add similarity score from fuzzy search
+                if ex.get("similarity"):
+                    suggestion["similarity"] = ex["similarity"]
+                suggestions.append(suggestion)
             
             return {"success": True, "suggestions": suggestions}
-            
-        except Exception:
-            query_lower = query.lower()
-            suggestions = []
-            for name in exercise_names:
-                if query_lower in name.lower() and len(suggestions) < 5:
-                    suggestions.append({"exercise": name})
-            return {"success": True, "suggestions": suggestions}
-            
+        
+        # Fallback to simple ILIKE search if the RPC function doesn't exist
+        return _fallback_search(query.strip(), max_suggestions)
+        
+    except Exception as e:
+        # If PostgreSQL function fails, fallback to simple search
+        return _fallback_search(query.strip(), max_suggestions)
+
+def _fallback_search(query: str, max_suggestions: int) -> Dict:
+    """Fallback search using simple ILIKE pattern matching."""
+    try:
+        query_lower = query.lower()
+        result = supabase.table("dim_exercises").select("exercise").ilike("exercise", f"%{query_lower}%").limit(max_suggestions).execute()
+        
+        return {"success": True, "suggestions": [{"exercise": ex["exercise"]} for ex in result.data]}
+        
     except Exception as e:
         return {"success": False, "error": str(e)}

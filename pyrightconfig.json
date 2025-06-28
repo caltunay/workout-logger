@@ -1,0 +1,7 @@
+{
+    "include": ["."],
+    "exclude": ["**/__pycache__", "**/.*", "test-workout-tracker/"],
+    "venvPath": ".",
+    "venv": "test-workout-tracker",
+    "pythonVersion": "3.12"
+}

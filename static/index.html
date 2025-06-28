@@ -17,7 +17,8 @@
                 <button type="submit" class="w-full bg-blue-600 text-white p-3 rounded-lg hover:bg-blue-700">Login</button>
             </form>
             <p class="mt-4 text-center">
-                <button onclick="showSignup()" class="text-blue-600 hover:underline">Sign up</button>
+                <button onclick="showSignup()" class="text-blue-600 hover:underline">Sign up</button> | 
+                <button onclick="showForgotPassword()" class="text-blue-600 hover:underline">Forgot password?</button>
             </p>
         </div>
     </div>
@@ -37,6 +38,20 @@
         </div>
     </div>
 
+    <!-- Forgot Password Section -->
+    <div id="forgotPasswordSection" class="min-h-screen flex items-center justify-center hidden">
+        <div class="bg-white p-8 rounded-lg shadow-md w-96">
+            <h2 class="text-2xl font-bold mb-6 text-center">Reset Password</h2>
+            <form id="forgotPasswordForm" class="space-y-4">
+                <input type="email" id="forgotEmail" placeholder="Email" class="w-full p-3 border rounded-lg" required>
+                <button type="submit" class="w-full bg-orange-600 text-white p-3 rounded-lg hover:bg-orange-700">Send Reset Email</button>
+            </form>
+            <p class="mt-4 text-center">
+                <button onclick="showLogin()" class="text-blue-600 hover:underline">Back to login</button>
+            </p>
+        </div>
+    </div>
+
     <!-- Main App Section -->
     <div id="appSection" class="p-6 hidden">
         <div class="max-w-2xl mx-auto">
@@ -47,18 +62,33 @@
 
             <!-- Session Status -->
             <div id="sessionStatus" class="mb-6">
-                <div id="noSession" class="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-                    <p class="text-yellow-800">No active workout session.</p>
-                    <button onclick="startSession()" class="mt-2 bg-green-600 hover:bg-green-700 text-white font-medium py-2 px-4 rounded-lg">
-                        Start Workout Session
-                    </button>
+                <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                    <p class="text-blue-800 mb-3">Select a workout date:</p>
+                    <div class="flex gap-4 items-center">
+                        <input type="datetime-local" id="workoutDate" class="p-2 border rounded-lg" onchange="loadSessionsForDate()">
+                        <button onclick="createSession()" class="bg-green-600 hover:bg-green-700 text-white font-medium py-2 px-4 rounded-lg">
+                            Create Workout Session
+                        </button>
+                        <button onclick="showAllSessions()" class="bg-purple-600 hover:bg-purple-700 text-white font-medium py-2 px-4 rounded-lg">
+                            View All Sessions
+                        </button>
+                    </div>
+                    <div id="sessionsList" class="mt-4"></div>
                 </div>
-                
-                <div id="activeSession" class="bg-green-50 border border-green-200 rounded-lg p-4 hidden">
-                    <p class="text-green-800">Active workout session in progress</p>
-                    <button onclick="endSession()" class="mt-2 bg-red-600 hover:bg-red-700 text-white font-medium py-2 px-4 rounded-lg">
-                        End Session
-                    </button>
+            </div>
+
+            <!-- All Sessions Modal -->
+            <div id="allSessionsModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+                <div class="bg-white rounded-lg p-6 w-full max-w-2xl max-h-96 overflow-y-auto">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-xl font-bold">All Workout Sessions</h2>
+                        <button onclick="hideAllSessions()" class="text-gray-500 hover:text-gray-700">
+                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                            </svg>
+                        </button>
+                    </div>
+                    <div id="allSessionsList"></div>
                 </div>
             </div>
 
@@ -68,7 +98,7 @@
                 <form id="exerciseForm" class="grid grid-cols-1 md:grid-cols-4 gap-4">
                     <div class="relative">
                         <input type="text" id="exerciseName" placeholder="Exercise name" class="w-full p-3 border rounded-lg" required autocomplete="off">
-                        <div id="exerciseDropdown" class="absolute top-full left-0 right-0 bg-white border border-gray-300 rounded-lg shadow-lg z-10 hidden max-h-48 overflow-y-auto"></div>
+                        <div id="exerciseDropdown" class="absolute top-full left-0 right-0 bg-white border border-gray-300 rounded-lg shadow-lg z-10 hidden max-h-60 overflow-y-auto"></div>
                     </div>
                     <input type="number" id="reps" placeholder="Reps" class="w-full p-3 border rounded-lg" required>
                     <input type="number" id="weight" placeholder="Weight" class="w-full p-3 border rounded-lg" required>
@@ -106,7 +136,6 @@
                 if (data.success) {
                     currentUser = {user_id: data.user_id, access_token: data.access_token};
                     showApp();
-                    loadCurrentSession();
                 } else {
                     alert('Login failed');
                 }
@@ -139,6 +168,29 @@
             }
         });
 
+        document.getElementById('forgotPasswordForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const email = document.getElementById('forgotEmail').value;
+            
+            try {
+                const response = await fetch('/api/forgot-password', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({email})
+                });
+                const data = await response.json();
+                
+                if (data.success) {
+                    alert('Password reset email sent! Check your inbox.');
+                    showLogin();
+                } else {
+                    alert('Failed to send reset email');
+                }
+            } catch (error) {
+                alert('Reset error: ' + error.message);
+            }
+        });
+
         // Exercise suggestions
         document.getElementById('exerciseName').addEventListener('input', async (e) => {
             clearTimeout(debounceTimer);
@@ -150,7 +202,8 @@
                 }
                 
                 try {
-                    const response = await fetch(`/api/exercise-suggestions?query=${encodeURIComponent(query)}`);
+                    // Request 10 suggestions instead of default 5
+                    const response = await fetch(`/api/exercise-suggestions?query=${encodeURIComponent(query)}&limit=10`);
                     const data = await response.json();
                     
                     if (data.success) {
@@ -166,7 +219,7 @@
         document.getElementById('exerciseForm').addEventListener('submit', async (e) => {
             e.preventDefault();
             if (!currentSession) {
-                alert('Please start a workout session first');
+                alert('Please select or create a workout session first');
                 return;
             }
             
@@ -201,47 +254,49 @@
         });
 
         // Session management
-        async function startSession() {
+        async function createSession() {
+            const workoutDate = document.getElementById('workoutDate').value;
+            if (!workoutDate) {
+                alert('Please select a date and time');
+                return;
+            }
+            
             try {
-                const response = await fetch('/api/start-session', {
+                const response = await fetch('/api/create-session', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({
                         user_id: currentUser.user_id,
-                        access_token: currentUser.access_token
+                        access_token: currentUser.access_token,
+                        workout_date: new Date(workoutDate).toISOString()
                     })
                 });
                 const data = await response.json();
                 
                 if (data.success) {
                     currentSession = {id: data.session_id};
-                    updateSessionStatus(true);
+                    loadSessionsForDate();
                     loadCurrentSession();
                 }
             } catch (error) {
-                alert('Error starting session: ' + error.message);
+                alert('Error creating session: ' + error.message);
             }
         }
 
-        async function endSession() {
+        async function loadSessionsForDate() {
+            const workoutDate = document.getElementById('workoutDate').value;
+            if (!workoutDate) return;
+            
             try {
-                const response = await fetch(`/api/end-session/${currentSession.id}`, {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({
-                        user_id: currentUser.user_id,
-                        access_token: currentUser.access_token
-                    })
-                });
+                const dateStr = new Date(workoutDate).toISOString();
+                const response = await fetch(`/api/sessions-by-date?user_id=${currentUser.user_id}&access_token=${currentUser.access_token}&date=${dateStr}`);
                 const data = await response.json();
                 
                 if (data.success) {
-                    currentSession = null;
-                    updateSessionStatus(false);
-                    document.getElementById('setsList').innerHTML = '';
+                    displaySessions(data.sessions);
                 }
             } catch (error) {
-                alert('Error ending session: ' + error.message);
+                console.error('Error loading sessions:', error);
             }
         }
 
@@ -252,11 +307,10 @@
                 
                 if (data.success && data.session) {
                     currentSession = data.session;
-                    updateSessionStatus(true);
                     displaySets(data.sets);
                 } else {
                     currentSession = null;
-                    updateSessionStatus(false);
+                    document.getElementById('setsList').innerHTML = '';
                 }
             } catch (error) {
                 console.error('Error loading session:', error);
@@ -267,19 +321,35 @@
         function showLogin() {
             document.getElementById('loginSection').classList.remove('hidden');
             document.getElementById('signupSection').classList.add('hidden');
+            document.getElementById('forgotPasswordSection').classList.add('hidden');
             document.getElementById('appSection').classList.add('hidden');
         }
 
         function showSignup() {
             document.getElementById('loginSection').classList.add('hidden');
             document.getElementById('signupSection').classList.remove('hidden');
+            document.getElementById('forgotPasswordSection').classList.add('hidden');
+            document.getElementById('appSection').classList.add('hidden');
+        }
+
+        function showForgotPassword() {
+            document.getElementById('loginSection').classList.add('hidden');
+            document.getElementById('signupSection').classList.add('hidden');
+            document.getElementById('forgotPasswordSection').classList.remove('hidden');
             document.getElementById('appSection').classList.add('hidden');
         }
 
         function showApp() {
             document.getElementById('loginSection').classList.add('hidden');
             document.getElementById('signupSection').classList.add('hidden');
+            document.getElementById('forgotPasswordSection').classList.add('hidden');
             document.getElementById('appSection').classList.remove('hidden');
+            
+            // Set default date to now
+            const now = new Date();
+            now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+            document.getElementById('workoutDate').value = now.toISOString().slice(0, 16);
+            loadSessionsForDate();
         }
 
         function logout() {
@@ -288,16 +358,49 @@
             showLogin();
         }
 
-        function updateSessionStatus(hasSession) {
-            document.getElementById('noSession').classList.toggle('hidden', hasSession);
-            document.getElementById('activeSession').classList.toggle('hidden', !hasSession);
+        function displaySessions(sessions) {
+            const sessionsList = document.getElementById('sessionsList');
+            if (sessions.length === 0) {
+                sessionsList.innerHTML = '<p class="text-gray-500 text-sm">No sessions for this date</p>';
+                return;
+            }
+            
+            sessionsList.innerHTML = sessions.map(session => {
+                const date = new Date(session.created_at);
+                const timeStr = date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+                const sessionName = session.name || `Session at ${timeStr}`;
+                const escapedName = sessionName.replace(/'/g, "\\'");
+                return `<div class="flex justify-between items-center p-2 border rounded bg-white mt-2">
+                    <div class="flex-1">
+                        <span class="text-sm font-medium">${sessionName}</span>
+                        <span class="text-xs text-gray-500 ml-2">${timeStr}</span>
+                    </div>
+                    <div class="flex gap-2">
+                        <button onclick="renameSession(${session.id}, '${escapedName}')" class="bg-orange-500 hover:bg-orange-600 text-white text-xs px-2 py-1 rounded">
+                            Rename
+                        </button>
+                        <button onclick="selectSession(${session.id})" class="bg-blue-500 hover:bg-blue-600 text-white text-xs px-2 py-1 rounded">
+                            Select
+                        </button>
+                    </div>
+                </div>`;
+            }).join('');
+        }
+
+        function selectSession(sessionId) {
+            currentSession = {id: sessionId};
+            loadCurrentSession();
         }
 
         function showDropdown(suggestions) {
             const dropdown = document.getElementById('exerciseDropdown');
-            dropdown.innerHTML = suggestions.map(s => 
-                `<div class="p-2 hover:bg-gray-100 cursor-pointer" onclick="selectExercise('${s.exercise}')">${s.exercise}</div>`
-            ).join('');
+            dropdown.innerHTML = suggestions.map(s => {
+                const similarity = s.similarity ? ` (${(s.similarity * 100).toFixed(0)}%)` : '';
+                return `<div class="p-2 hover:bg-gray-100 cursor-pointer border-b border-gray-100 last:border-b-0" onclick="selectExercise('${s.exercise}')">
+                    <span class="font-medium">${s.exercise}</span>
+                    ${similarity ? `<span class="text-gray-500 text-sm ml-2">${similarity}</span>` : ''}
+                </div>`;
+            }).join('');
             dropdown.classList.remove('hidden');
         }
 
@@ -317,12 +420,134 @@
                 return;
             }
             
-            setsList.innerHTML = sets.map(set => 
-                `<div class="flex justify-between items-center p-3 border-b">
-                    <span class="font-medium">${set.exercise_name}</span>
-                    <span>${set.reps} reps × ${set.weight}${set.is_kg ? 'kg' : 'lbs'}</span>
-                </div>`
-            ).join('');
+            setsList.innerHTML = sets.map(set => {
+                return `<div class="flex justify-between items-center p-3 border-b">
+                    <div class="flex-1">
+                        <span class="font-medium">${set.exercise_name}</span>
+                        <div class="text-sm text-gray-600">${set.reps} reps × ${set.weight}${set.is_kg ? 'kg' : 'lbs'}</div>
+                    </div>
+                    <div class="flex gap-2">
+                        <button onclick="duplicateSet(${set.id})" class="bg-blue-500 hover:bg-blue-600 text-white text-xs px-2 py-1 rounded">
+                            Duplicate
+                        </button>
+                        <button onclick="editSet(${set.id}, ${set.reps}, ${set.weight})" class="bg-yellow-500 hover:bg-yellow-600 text-white text-xs px-2 py-1 rounded">
+                            Edit
+                        </button>
+                        <button onclick="removeSet(${set.id})" class="bg-red-500 hover:bg-red-600 text-white text-xs px-2 py-1 rounded">
+                            Remove
+                        </button>
+                    </div>
+                </div>`;
+            }).join('');
+        }
+
+        async function renameSession(sessionId, currentName) {
+            const newName = prompt('Enter new session name:', currentName);
+            if (!newName || newName === currentName) return;
+            
+            try {
+                const response = await fetch('/api/rename-session', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        session_id: sessionId,
+                        name: newName,
+                        user_id: currentUser.user_id,
+                        access_token: currentUser.access_token
+                    })
+                });
+                const data = await response.json();
+                
+                if (data.success) {
+                    loadSessionsForDate();
+                } else {
+                    alert('Failed to rename session');
+                }
+            } catch (error) {
+                alert('Error renaming session: ' + error.message);
+            }
+        }
+
+        async function showAllSessions() {
+            try {
+                const response = await fetch(`/api/all-sessions?user_id=${currentUser.user_id}&access_token=${currentUser.access_token}`);
+                const data = await response.json();
+                
+                if (data.success) {
+                    displayAllSessions(data.sessions);
+                    document.getElementById('allSessionsModal').classList.remove('hidden');
+                }
+            } catch (error) {
+                alert('Error loading sessions: ' + error.message);
+            }
+        }
+
+        function hideAllSessions() {
+            document.getElementById('allSessionsModal').classList.add('hidden');
+        }
+
+        function displayAllSessions(sessions) {
+            const allSessionsList = document.getElementById('allSessionsList');
+            if (sessions.length === 0) {
+                allSessionsList.innerHTML = '<p class="text-gray-500 text-center py-4">No workout sessions found</p>';
+                return;
+            }
+            
+            allSessionsList.innerHTML = sessions.map(session => {
+                const date = new Date(session.created_at);
+                const dateStr = date.toLocaleDateString();
+                const timeStr = date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+                const sessionName = session.name || `Session at ${timeStr}`;
+                const escapedName = sessionName.replace(/'/g, "\\'");
+                return `<div class="flex justify-between items-center p-3 border-b hover:bg-gray-50">
+                    <div class="flex-1">
+                        <div class="font-medium">${sessionName}</div>
+                        <div class="text-sm text-gray-500">${dateStr} ${timeStr} • ${session.set_count} sets</div>
+                    </div>
+                    <div class="flex gap-2">
+                        <button onclick="renameSessionFromModal(${session.id}, '${escapedName}')" class="bg-orange-500 hover:bg-orange-600 text-white text-xs px-2 py-1 rounded">
+                            Rename
+                        </button>
+                        <button onclick="selectSessionFromModal(${session.id})" class="bg-blue-500 hover:bg-blue-600 text-white text-xs px-2 py-1 rounded">
+                            Select
+                        </button>
+                    </div>
+                </div>`;
+            }).join('');
+        }
+
+        async function renameSessionFromModal(sessionId, currentName) {
+            const newName = prompt('Enter new session name:', currentName);
+            if (!newName || newName === currentName) return;
+            
+            try {
+                const response = await fetch('/api/rename-session', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        session_id: sessionId,
+                        name: newName,
+                        user_id: currentUser.user_id,
+                        access_token: currentUser.access_token
+                    })
+                });
+                const data = await response.json();
+                
+                if (data.success) {
+                    showAllSessions(); // Refresh the modal
+                    loadSessionsForDate(); // Refresh the current date sessions
+                } else {
+                    alert('Failed to rename session');
+                }
+            } catch (error) {
+                alert('Error renaming session: ' + error.message);
+            }
+        }
+
+        function selectSessionFromModal(sessionId) {
+            currentSession = {id: sessionId};
+            loadCurrentSession();
+            hideAllSessions();
         }
 
         // Close dropdown when clicking outside
@@ -330,7 +555,111 @@
             if (!e.target.closest('#exerciseName') && !e.target.closest('#exerciseDropdown')) {
                 hideDropdown();
             }
+            
+            // Close modal when clicking outside
+            if (e.target.id === 'allSessionsModal') {
+                hideAllSessions();
+            }
         });
+
+        // Set management functions
+        async function duplicateSet(setId) {
+            console.log('Duplicating set:', setId);
+            try {
+                const response = await fetch('/api/duplicate-set', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        set_id: setId,
+                        user_id: currentUser.user_id,
+                        access_token: currentUser.access_token
+                    })
+                });
+                const data = await response.json();
+                console.log('Duplicate response:', data);
+                
+                if (data.success) {
+                    loadCurrentSession(); // Refresh the sets display
+                } else {
+                    alert('Failed to duplicate set: ' + (data.detail || 'Unknown error'));
+                }
+            } catch (error) {
+                console.error('Duplicate error:', error);
+                alert('Error duplicating set: ' + error.message);
+            }
+        }
+
+        async function editSet(setId, currentReps, currentWeight) {
+            console.log('Editing set:', setId, 'reps:', currentReps, 'weight:', currentWeight);
+            const newReps = prompt('Enter new reps:', currentReps);
+            if (newReps === null) return; // User cancelled
+            
+            const newWeight = prompt('Enter new weight:', currentWeight);
+            if (newWeight === null) return; // User cancelled
+            
+            const reps = parseInt(newReps);
+            const weight = parseInt(newWeight);
+            
+            if (isNaN(reps) || isNaN(weight) || reps <= 0 || weight <= 0) {
+                alert('Please enter valid positive numbers for reps and weight');
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/edit-set', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        set_id: setId,
+                        reps: reps,
+                        weight: weight,
+                        user_id: currentUser.user_id,
+                        access_token: currentUser.access_token
+                    })
+                });
+                const data = await response.json();
+                console.log('Edit response:', data);
+                
+                if (data.success) {
+                    loadCurrentSession(); // Refresh the sets display
+                } else {
+                    alert('Failed to edit set: ' + (data.detail || 'Unknown error'));
+                }
+            } catch (error) {
+                console.error('Edit error:', error);
+                alert('Error editing set: ' + error.message);
+            }
+        }
+
+        async function removeSet(setId) {
+            console.log('Removing set:', setId);
+            if (!confirm('Are you sure you want to remove this set?')) {
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/remove-set', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        set_id: setId,
+                        user_id: currentUser.user_id,
+                        access_token: currentUser.access_token
+                    })
+                });
+                const data = await response.json();
+                console.log('Remove response:', data);
+                
+                if (data.success) {
+                    loadCurrentSession(); // Refresh the sets display
+                } else {
+                    alert('Failed to remove set: ' + (data.detail || 'Unknown error'));
+                }
+            } catch (error) {
+                console.error('Remove error:', error);
+                alert('Error removing set: ' + error.message);
+            }
+        }
     </script>
 </body>
 </html>

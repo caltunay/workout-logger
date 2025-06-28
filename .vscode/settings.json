@@ -1,0 +1,15 @@
+{
+    "python.pythonPath": "./test-workout-tracker/bin/python",
+    "python.defaultInterpreterPath": "./test-workout-tracker/bin/python",
+    "python.venvPath": "./test-workout-tracker",
+    "python.terminal.activateEnvironment": true,
+    "python.analysis.autoImportCompletions": true,
+    "python.analysis.typeCheckingMode": "basic",
+    "python.analysis.extraPaths": [
+        "./test-workout-tracker/lib/python3.12/site-packages"
+    ],
+    "python.linting.enabled": false,
+    "python.linting.pylintEnabled": false,
+    "python.linting.flake8Enabled": false,
+    "pylance.insidersChannel": "off"
+}

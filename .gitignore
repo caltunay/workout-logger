@@ -2,3 +2,4 @@
 test-workout-tracker/
 __pycache__/
 README.md
+supabase_functions.sql
