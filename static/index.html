@@ -108,7 +108,7 @@
 
             <!-- Current Session Sets -->
             <div id="currentSets" class="bg-white rounded-lg shadow-md p-6">
-                <h2 class="text-xl font-bold mb-4">Current Session</h2>
+                <h2 id="currentSessionTitle" class="text-xl font-bold mb-4">No Session Selected</h2>
                 <div id="setsList"></div>
             </div>
         </div>
@@ -244,7 +244,7 @@
                 if (data.success) {
                     document.getElementById('exerciseForm').reset();
                     hideDropdown();
-                    loadCurrentSession();
+                    refreshCurrentSession();
                 } else {
                     alert('Failed to add set');
                 }
@@ -274,9 +274,8 @@
                 const data = await response.json();
                 
                 if (data.success) {
-                    currentSession = {id: data.session_id};
+                    loadSelectedSession(data.session_id);
                     loadSessionsForDate();
-                    loadCurrentSession();
                 }
             } catch (error) {
                 alert('Error creating session: ' + error.message);
@@ -307,13 +306,61 @@
                 
                 if (data.success && data.session) {
                     currentSession = data.session;
+                    updateSessionTitle(data.session);
                     displaySets(data.sets);
                 } else {
                     currentSession = null;
+                    updateSessionTitle(null);
                     document.getElementById('setsList').innerHTML = '';
                 }
             } catch (error) {
                 console.error('Error loading session:', error);
+            }
+        }
+
+        async function loadSelectedSession(sessionId) {
+            try {
+                const response = await fetch(`/api/session-sets?session_id=${sessionId}&user_id=${currentUser.user_id}&access_token=${currentUser.access_token}`);
+                const data = await response.json();
+                
+                if (data.success) {
+                    currentSession = data.session;
+                    updateSessionTitle(data.session);
+                    displaySets(data.sets);
+                } else {
+                    alert('Failed to load session');
+                }
+            } catch (error) {
+                console.error('Error loading selected session:', error);
+                alert('Error loading session: ' + error.message);
+            }
+        }
+
+        function updateSessionTitle(session) {
+            const titleElement = document.getElementById('currentSessionTitle');
+            if (!session) {
+                titleElement.textContent = 'No Session Selected';
+                return;
+            }
+            
+            if (session.name) {
+                titleElement.textContent = `Session ${session.name}`;
+            } else {
+                const date = new Date(session.created_at);
+                const dateStr = date.toLocaleDateString();
+                const timeStr = date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+                titleElement.textContent = `Session ${dateStr} ${timeStr}`;
+            }
+        }
+
+        async function refreshCurrentSession() {
+            // Refresh the currently selected session instead of loading the most recent one
+            if (currentSession && currentSession.id) {
+                await loadSelectedSession(currentSession.id);
+            } else {
+                // If no session is selected, clear the display
+                updateSessionTitle(null);
+                document.getElementById('setsList').innerHTML = '';
             }
         }
 
@@ -349,12 +396,16 @@
             const now = new Date();
             now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
             document.getElementById('workoutDate').value = now.toISOString().slice(0, 16);
+            
+            // Initialize session title
+            updateSessionTitle(null);
             loadSessionsForDate();
         }
 
         function logout() {
             currentUser = null;
             currentSession = null;
+            updateSessionTitle(null);
             showLogin();
         }
 
@@ -388,8 +439,7 @@
         }
 
         function selectSession(sessionId) {
-            currentSession = {id: sessionId};
-            loadCurrentSession();
+            loadSelectedSession(sessionId);
         }
 
         function showDropdown(suggestions) {
@@ -545,8 +595,7 @@
         }
 
         function selectSessionFromModal(sessionId) {
-            currentSession = {id: sessionId};
-            loadCurrentSession();
+            loadSelectedSession(sessionId);
             hideAllSessions();
         }
 
@@ -579,7 +628,7 @@
                 console.log('Duplicate response:', data);
                 
                 if (data.success) {
-                    loadCurrentSession(); // Refresh the sets display
+                    refreshCurrentSession(); // Refresh the sets display
                 } else {
                     alert('Failed to duplicate set: ' + (data.detail || 'Unknown error'));
                 }
@@ -621,7 +670,7 @@
                 console.log('Edit response:', data);
                 
                 if (data.success) {
-                    loadCurrentSession(); // Refresh the sets display
+                    refreshCurrentSession(); // Refresh the sets display
                 } else {
                     alert('Failed to edit set: ' + (data.detail || 'Unknown error'));
                 }
@@ -651,7 +700,7 @@
                 console.log('Remove response:', data);
                 
                 if (data.success) {
-                    loadCurrentSession(); // Refresh the sets display
+                    refreshCurrentSession(); // Refresh the sets display
                 } else {
                     alert('Failed to remove set: ' + (data.detail || 'Unknown error'));
                 }

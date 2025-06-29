@@ -4,7 +4,7 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from auth import login_user, signup_user, reset_password
 from exercises import get_exercise_suggestions
-from workouts import create_workout_session, add_set_to_session, get_current_session, get_sessions_by_date, rename_workout_session, get_all_sessions, duplicate_set, edit_set, remove_set, duplicate_set, edit_set, remove_set
+from workouts import create_workout_session, add_set_to_session, get_current_session, get_sessions_by_date, rename_workout_session, get_all_sessions, duplicate_set, edit_set, remove_set, get_session_sets
 
 app = FastAPI(title="Workout Tracker", version="1.0.0")
 
@@ -119,6 +119,10 @@ async def edit_set_endpoint(request: EditSetRequest):
 @app.post("/api/remove-set")
 async def remove_set_endpoint(request: RemoveSetRequest):
     return remove_set(request.set_id, request.user_id, request.access_token)
+
+@app.get("/api/session-sets")
+async def session_sets(session_id: int, user_id: str, access_token: str):
+    return get_session_sets(session_id, user_id, access_token)
 
 # Test endpoint to verify database schema
 @app.get("/api/test-schema")

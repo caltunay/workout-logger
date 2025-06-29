@@ -1,6 +1,6 @@
 from fastapi import HTTPException
 from config import supabase
-from datetime import datetime
+from datetime import datetime, timedelta
 
 def create_workout_session(user_id: str, access_token: str, workout_date: str):
     try:
@@ -197,3 +197,35 @@ def remove_set(set_id: int, user_id: str, access_token: str):
         raise
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Failed to remove set: {str(e)}")
+
+def get_session_sets(session_id: int, user_id: str, access_token: str):
+    try:
+        supabase.auth.set_session(access_token, "")
+        
+        # Get the session details
+        session_result = supabase.table("workout_sessions").select("*").eq("id", session_id).eq("user_id", user_id).execute()
+        
+        if not session_result.data:
+            raise HTTPException(status_code=404, detail="Session not found")
+        
+        session = session_result.data[0]
+        
+        # Get sets for this session
+        sets_result = supabase.table("session_sets").select("*").eq("session_id", session_id).order("created_at").execute()
+        
+        # Enrich sets with exercise names
+        enriched_sets = []
+        for set_data in sets_result.data:
+            exercise_name = set_data["exercise_id"]
+            try:
+                exercise_result = supabase.table("dim_exercises").select("exercise").eq("id", set_data["exercise_id"]).execute()
+                if exercise_result.data:
+                    exercise_name = exercise_result.data[0]["exercise"]
+            except:
+                pass
+            
+            enriched_sets.append({**set_data, "exercise_name": exercise_name})
+        
+        return {"success": True, "session": session, "sets": enriched_sets}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Failed to get session sets: {str(e)}")
